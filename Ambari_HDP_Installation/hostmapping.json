@@ -1,0 +1,32 @@
+{
+"blueprint" : "datalake",
+"default_password" : "admin",
+"host_groups" :[
+  {
+  "name" : "master1",
+  "hosts" : [
+  {
+  "fqdn" : "master.hadoop.com"
+  }
+  ]
+  },
+  {
+  "name" : "node1",
+  "hosts" : [
+  {
+  "fqdn" : "node1.hadoop.com"
+  }
+  ]
+  },
+  {
+  "name" : "node2",
+  "hosts" : [
+  {
+  "fqdn" : "node.hadoop.com"
+  }
+  ]
+  }
+]
+}
+
+
