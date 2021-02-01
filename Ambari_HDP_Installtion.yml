@@ -1,0 +1,125 @@
+- hosts: all
+  user: root
+  tasks:
+    - name: stop and disable iptables
+      command: '{{ item }}'
+      with_items:
+        - systemctl stop iptables
+        - systemctl disable iptables
+    - name: Stop iptables and disable ip6tables
+      command: '{{ item }}'
+      with_items:
+        - systemctl stop ip6tables
+        - systemctl disable ip6tables
+    - name: Disable Selinux Permanently
+      shell: sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+    - name: Disabling Transparrent Huge Pages
+      lineinfile:
+        dest: /etc/rc.local
+        line: '{{ item }}'
+      with_items:
+        - echo never > /sys/kernel/mm/transparent_hugepage/enabled
+        - echo never > /sys/kernel/mm/transparent_hugepage/defrag
+    - name: Disabling VM Swapiness
+      lineinfile:
+        dest: /etc/sysctl.conf
+        line: vm.swappiness = 10
+    - name: Installing NTP
+      yum: name=ntp state=installed
+    - name: Start and Enabling NTP Services
+      command: '{{ item }}'
+      with_items:
+        - systemctl start ntpd
+        - systemctl enable ntpd
+- hosts: master.hadoop.com
+  tasks:
+    - name: Installing Http
+      yum: name=httpd state=installed
+    - name: Start and Enabling HTTP
+      command: '{{ item }}'
+      with_items:
+        - systemctl start httpd
+        - systemctl enable httpd
+- hosts: all
+  user: root
+  tasks:
+    - name: Downlaod JDK tarball
+      get_url: >-
+        url=http://public-repo-1.hortonworks.com/ARTIFACTS/jdk-8u77-linux-x64.tar.gz
+        dest=/root/jdk-8u77-linux-x64.tar.gz
+    - name: Creating Directory for JDK
+      file: path=/usr/java state=directory
+    - name: Extract jdk-8u77-linux-x64.tar.gz into /usr/java
+      unarchive: src=/root/jdk-8u77-linux-x64.tar.gz dest=/usr/java
+- hosts: all
+  user: root
+  tasks:
+    - name: Downloading Ambari Repo
+      get_url: >-
+        url=http://public-repo-1.hortonworks.com/ambari/centos7/2.x/updates/2.6.2.0/ambari.repo
+        dest=/root
+    - name: Downloading HDP 3.0 Repo
+      get_url: >-
+        url=http://public-repo-1.hortonworks.com/HDP/centos7/2.x/updates/2.6.5.0/hdp.repo
+        dest=/root/
+    - name: Downloading HDP-GPL Repo
+      get_url: >-
+        url=http://public-repo-1.hortonworks.com/HDP-GPL/centos7/2.x/updates/2.6.5.0/hdp.gpl.repo
+        dest=/root/
+- hosts: all
+  tasks:
+    - name: 'Copy ambari,hdp,hdp-gpl to all nodes'
+      copy: 'src=/root/{{ item }} dest=/etc/yum.repos.d/ remote_src=yes'
+      with_items:
+        - ambari.repo
+        - hdp.repo
+        - hdp.gpl.repo
+    - name: Clean YUM
+      command: yum clean all
+    - name: Install Ambari agent
+      yum: name=ambari-agent state=installed
+    - name: Start Ambari Agent
+      command: systemctl start ambari-agent
+    - name: Configure Ambari agent to register at Ambari Server
+      lineinfile: >-
+        dest=/etc/ambari-agent/conf/ambari-agent.ini create=no state=present
+        regexp='hostname=.*' line='hostname={{ ansible_fqdn }}'
+- hosts: master.hadoop.com
+  tasks:
+    - name: Install Ambari-Server
+      yum: name=ambari-server state=installed
+    - name: Configure Ambari-Server
+      command: ambari-server setup -s
+    - name: Start Ambari Server
+      command: sleep 15 && ambari-server start
+    - name: Verify connection to ambari-server port 8080
+      uri:
+        url: 'http://192.168.0.7:8080/api/v1/hosts'
+        method: GET
+        headers:
+          X-Requested-By: ambari
+        user: admin
+        password: admin
+        force_basic_auth: 'yes'
+        status_code: 200
+      retries: 10
+      delay: 1
+      register: check_ambari_server_port
+      until: check_ambari_server_port.status == 200
+
+    - name: Register Blue print
+      shell: >
+          curl -H "X-Requested-By: ambari" -X POST -u admin:admin http://192.168.0.7:8080/api/v1/blueprints/datalake -d @/root/cluster_config.json
+    - name: Setup HDP Repo
+      shell: >
+          curl -H "X-Requested-By: ambari" -X PUT -u admin:admin http://192.168.0.7:8080/api/v1/stacks/HDP/versions/2.6/operating_systems/centos/repositories/HDP-2.6    -d @/root/repo.json
+    - name: Setup HDP Util Repo
+      shell: >
+          curl -H "X-Requested-By: ambari" -X PUT -u admin:admin http://192.168.0.7:8080/api/v1/stacks/HDP/versions/2.6/operating_systems/centos7/repositories/HDP-UTILS-1.1.0.22 -d @/root/hdputil-repo.json
+    - name: Start the installation
+      shell: >
+          curl -H "X-Requested-By: ambari" -X POST -u admin:admin http://192.168.0.7:8080:8080/api/v1/clusters/datalake -d @hostmap.json
+
+
+
+
