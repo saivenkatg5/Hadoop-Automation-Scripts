@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Example: Topic file should be like this test_topic,3,3 ---> Topic Name,Partition count,Replication Factor 
-# you can invoke a specific fucntion based upon requirement sh kafka-topic.sh  createKafkaTopic ---> scriptname functionname 
+# you can invoke a specific function based upon requirement sh kafka-topic.sh  createKafkaTopic ---> scriptname functionname 
 
 
 config()
@@ -10,7 +10,6 @@ zoo_server=$(cat /etc/kafka/conf/server.properties  | grep -w 'zookeeper.connect
 topic=$(echo "$i" | awk -F "," '{print $1}')
 partitions=$(echo "$i" | awk -F "," '{print $2}')
 replication=$(echo "$i" | awk -F "," '{print $3}')
-retention="$1"
 }
 
 createKafkaTopic()
@@ -27,6 +26,7 @@ createKafkaTopic()
 
 retentionKafkaTopic()
   {
+  retention="$1"
   for i in  $(cat topic)
   do
    config 	  
